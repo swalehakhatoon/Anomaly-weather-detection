@@ -24,7 +24,7 @@ async def lifespan(app: FastAPI):
     loop_task.cancel()
 
 app = FastAPI(
-    title="VayuDrishti AI (वायु-दृष्टि) API",
+    title="SkyGuard AI  (वायु-दृष्टि) API",
     description="Intelligent Anomaly Detection and Quality-Control Engine for India's AWS Network (MoES/IMD)",
     version="1.0.0",
     lifespan=lifespan

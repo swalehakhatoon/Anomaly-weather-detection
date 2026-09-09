@@ -1,4 +1,4 @@
-# VayuDrishti AI (वायु-दृष्टि)
+# SkyGuard AI 
 ## Intelligent AI/ML-Based Quality-Control & Anomaly Detection Platform for India's Automatic Weather Station (AWS) Network
 ### Ministry of Earth Sciences (MoES) / India Meteorological Department (IMD) — Smart India Hackathon 2026
 
@@ -6,7 +6,7 @@
 
 ## 1. Executive Summary
 
-**VayuDrishti AI** is an intelligent meteorological telemetry surveillance and quality-control system designed for the India Meteorological Department (IMD) under the Ministry of Earth Sciences (MoES).
+**SkyGuard AI ** is an intelligent meteorological telemetry surveillance and quality-control system designed for the India Meteorological Department (IMD) under the Ministry of Earth Sciences (MoES).
 
 Across India's vast geographical expanse—from the Thar Desert to the Western Himalayas and coastal peninsulas—thousands of Automatic Weather Stations (AWS) transmit continuous high-velocity weather telemetry (temperature, humidity, atmospheric pressure, wind, and rainfall). Sensors frequently suffer insect intrusion, mechanical sticking, power loss, and calibration drift.
 
@@ -16,7 +16,7 @@ Traditional static thresholds (e.g. `if temp > 45°C: alert()`) fail because:
 2. They cannot detect subtle sensor drift (+0.2°C/week).
 3. **They mistake true weather disasters (heatwaves, cloudbursts) for sensor hardware malfunctions.**
 
-**VayuDrishti AI solves this with a 4-Layer Detection Architecture and Spatial Cross-Validation Engine.**
+**SkyGuard AI  solves this with a 4-Layer Detection Architecture and Spatial Cross-Validation Engine.**
 
 ---
 

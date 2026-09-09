@@ -16,7 +16,7 @@ export default function Navbar({ activeTab, setActiveTab, istTime, criticalAlert
             <div>
               <div className="flex items-center space-x-2">
                 <span className="font-extrabold text-lg tracking-tight bg-gradient-to-r from-white via-slate-200 to-cyan-300 bg-clip-text text-transparent">
-                  VayuDrishti AI
+                  SkyGuard AI 
                 </span>
                 <span className="text-xs px-2 py-0.5 rounded-full font-medium bg-cyan-950 text-cyan-300 border border-cyan-800/60">
                   वायु-दृष्टि

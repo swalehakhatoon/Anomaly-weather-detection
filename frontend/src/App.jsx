@@ -113,7 +113,7 @@ export default function App() {
 
       {/* Footer */}
       <footer className="border-t border-slate-900 bg-slate-950/80 py-4 px-6 text-center text-xs text-slate-500 font-mono">
-        VayuDrishti AI (वायु-दृष्टि) • Ministry of Earth Sciences (MoES) / IMD AWS Quality Control • Smart India Hackathon 2026
+        SkyGuard AI  (वायु-दृष्टि) • Ministry of Earth Sciences (MoES) / IMD AWS Quality Control • Smart India Hackathon 2026
       </footer>
     </div>
   );

@@ -8,7 +8,7 @@ from backend.state import state_manager
 from backend.detector import haversine_distance
 
 def run_tests():
-    print("=== Testing VayuDrishti AI Anomaly Engine ===")
+    print("=== Testing SkyGuard AI  Anomaly Engine ===")
     
     # 1. Verify 15 stations seeded
     assert len(state_manager.stations) == 15, f"Expected 15 stations, got {len(state_manager.stations)}"
