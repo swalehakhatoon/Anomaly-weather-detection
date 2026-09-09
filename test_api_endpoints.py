@@ -96,7 +96,7 @@ def test_api():
         with urllib.request.urlopen(f"{base_url}/") as resp:
             assert resp.status == 200
             html = resp.read().decode()
-            assert "VayuDrishti" in html
+            assert "SkyGuard AI " in html
             print("[PASS] GET / serves built React Single Page Application bundle")
 
         print("\n>>> ALL 10 REST API AND STATIC ASSET ENDPOINTS VERIFIED AND PASSING! <<<")
