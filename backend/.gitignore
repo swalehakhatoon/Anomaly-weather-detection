@@ -1,0 +1,12 @@
+# Environment files(Prevents leaking API keys & secrets)
+.env
+.env.local
+*.env
+#Dependencies
+frontend/node_modules/backend/__pycache__/
+*.__pyc
+#build outputs
+frontend/dist/frontend/.vite-temp/
+#logs & temp files
+*.log
+npm-debug.log*
