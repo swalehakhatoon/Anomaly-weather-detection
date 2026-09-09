@@ -8,6 +8,8 @@ from typing import List, Dict, Any, Optional
 from backend.seed_data import SEED_STATIONS
 from backend.detector import AnomalyDetector
 from backend.models import Station, Reading, Anomaly, Alert, SystemMetrics
+from backend.config import USE_LIVE_WEATHER, LIVE_WEATHER_POLL_SECONDS
+from backend.weather_api import fetch_live_reading
 
 class TelemetryStateManager:
     def __init__(self):
@@ -17,12 +19,16 @@ class TelemetryStateManager:
         self.active_anomalies: List[Dict[str, Any]] = []
         self.active_alerts: List[Dict[str, Any]] = []
         self.feedback_log: List[Dict[str, Any]] = []
-        
+       
         # Fault Injection States
         self.active_faults: Dict[str, Dict[str, Any]] = {}
         self.simulated_tick = 0
         self.is_running = False
-        
+
+        # Live weather cache: station_id -> latest real observation dict
+        # (populated by run_live_weather_loop when USE_LIVE_WEATHER is on)
+        self.live_cache: Dict[str, Dict[str, float]] = {}
+
         # Initialize state with historical baseline
         self._initialize_network()
 
@@ -47,7 +53,7 @@ class TelemetryStateManager:
                 "last_reported": ""
             }
             self.readings_history[st_id] = []
-            
+           
         # Pre-populate historical readings (last 4 hours, 1 reading per 5 min)
         base_time = datetime.now(timezone(timedelta(hours=5, minutes=30)))
         for i in range(35, 0, -1):
@@ -69,24 +75,37 @@ class TelemetryStateManager:
         """Generate one round of telemetry for all stations and evaluate anomalies."""
         current_readings_map: Dict[str, Dict[str, float]] = {}
 
-        # 1. Synthesize current raw values for all stations
+        # 1. Synthesize (or fetch-cached) current raw values for all stations
         for st_id, station in self.stations.items():
-            base_temp = station["base_temp"]
-            base_hum = station["base_humidity"]
-            base_pres = station["base_pressure"]
+            live = self.live_cache.get(st_id) if USE_LIVE_WEATHER else None
 
-            temp = self._get_diurnal_temp(base_temp, hour)
-            humidity = self._get_diurnal_humidity(base_hum, hour)
-            pressure = round(base_pres + random.uniform(-0.8, 0.8), 1)
-            wind_spd = round(max(1.0, random.gauss(12.0, 4.0)), 1)
-            wind_dir = round(random.uniform(45.0, 280.0), 1)
-            rainfall = round(max(0.0, random.expovariate(1.8) if "Rainfall" in station["zone"] else 0.0), 1)
+            if live is not None:
+                # Use the most recent real observation, with a small jitter
+                # so consecutive ticks between API polls aren't identical
+                # (mirrors genuine sensor micro-noise).
+                temp = round(live["temperature"] + random.uniform(-0.1, 0.1), 2)
+                humidity = round(max(0.0, min(100.0, live["humidity"] + random.uniform(-0.5, 0.5))), 1)
+                pressure = round(live["pressure"] + random.uniform(-0.2, 0.2), 1)
+                wind_spd = round(max(0.0, live["wind_speed"] + random.uniform(-0.5, 0.5)), 1)
+                wind_dir = round(live["wind_direction"], 1)
+                rainfall = round(max(0.0, live["rainfall"]), 1)
+            else:
+                base_temp = station["base_temp"]
+                base_hum = station["base_humidity"]
+                base_pres = station["base_pressure"]
+
+                temp = self._get_diurnal_temp(base_temp, hour)
+                humidity = self._get_diurnal_humidity(base_hum, hour)
+                pressure = round(base_pres + random.uniform(-0.8, 0.8), 1)
+                wind_spd = round(max(1.0, random.gauss(12.0, 4.0)), 1)
+                wind_dir = round(random.uniform(45.0, 280.0), 1)
+                rainfall = round(max(0.0, random.expovariate(1.8) if "Rainfall" in station["zone"] else 0.0), 1)
 
             # Apply active fault injections if present
             if st_id in self.active_faults:
                 fault = self.active_faults[st_id]
                 f_type = fault["type"]
-                
+               
                 if f_type == "FLATLINE":
                     temp = fault.get("fixed_val", 34.0)
                 elif f_type == "HEATWAVE":
@@ -115,18 +134,24 @@ class TelemetryStateManager:
         # 2. Build expected baselines map for all stations for Level 4 spatial correlation
         expected_baselines_map: Dict[str, float] = {}
         for st_id, station in self.stations.items():
-            expected_baselines_map[st_id] = self._get_diurnal_temp(station["base_temp"], hour)
+            live = self.live_cache.get(st_id) if USE_LIVE_WEATHER else None
+            if live is not None:
+                # The real observation itself is the "expected" value before
+                # any fault injection is layered on top of it.
+                expected_baselines_map[st_id] = live["temperature"]
+            else:
+                expected_baselines_map[st_id] = self._get_diurnal_temp(station["base_temp"], hour)
 
         # 3. Evaluate each station through the 4-Level Pipeline
         for st_id, station in self.stations.items():
             station["last_reported"] = timestamp
             readings = current_readings_map[st_id]
             temp = readings["temperature"]
-            
+           
             # History of temperatures for statistical Level 2
             past_temps = [r["temperature"] for r in self.readings_history[st_id][-30:]]
             expected_temp = expected_baselines_map[st_id]
-            
+           
             is_synoptic = self.active_faults.get(st_id, {}).get("type") in ["HEATWAVE", "CLOUDBURST"]
 
             # Run 4-level evaluation
@@ -189,7 +214,7 @@ class TelemetryStateManager:
                 anom_id = f"ANOM-{st_id[-5:]}-{int(time.time()) % 100000}"
                 eval_param = "humidity" if analysis["rule_violation"] and readings["humidity"] > 100 else "temperature"
                 eval_val = readings[eval_param]
-                
+               
                 anomaly_entry = {
                     "anomaly_id": anom_id,
                     "station_id": st_id,
@@ -210,7 +235,7 @@ class TelemetryStateManager:
                     "recommended_action": analysis["recommended_action"],
                     "verification_status": "UNVERIFIED"
                 }
-                
+               
                 # Deduplicate ongoing anomalies for same station
                 self.active_anomalies = [a for a in self.active_anomalies if a["station_id"] != st_id]
                 self.active_anomalies.insert(0, anomaly_entry)
@@ -241,7 +266,7 @@ class TelemetryStateManager:
     def inject_scenario(self, scenario: str, station_id: Optional[str] = None) -> Dict[str, Any]:
         """Inject 1 of 5 realistic scenarios."""
         target_id = station_id or "IMD-RJ-04"
-        
+       
         if scenario == "STUCK_SENSOR":
             # Preset A: Stuck sensor flatline at 34.0°C
             self.active_faults[target_id] = {
@@ -318,7 +343,7 @@ class TelemetryStateManager:
             if anom["anomaly_id"] == anomaly_id:
                 anom["verification_status"] = action
                 st_id = anom["station_id"]
-                
+               
                 # If analyst dismissed or confirmed, adjust station accordingly
                 if action == "DISMISS":
                     if st_id in self.active_faults:
@@ -326,7 +351,7 @@ class TelemetryStateManager:
                     if st_id in self.stations:
                         self.stations[st_id]["status"] = "NORMAL"
                         self.stations[st_id]["trust_score"] = 0.95
-                        
+                       
                 feedback_item = {
                     "anomaly_id": anomaly_id,
                     "action": action,
@@ -335,7 +360,7 @@ class TelemetryStateManager:
                 }
                 self.feedback_log.append(feedback_item)
                 return {"status": "SUCCESS", "anomaly": anom}
-                
+               
         return {"status": "ERROR", "message": "Anomaly ID not found"}
 
     def get_system_metrics(self) -> Dict[str, Any]:
@@ -344,9 +369,9 @@ class TelemetryStateManager:
         normal_count = sum(1 for s in self.stations.values() if s["status"] == "NORMAL")
         health_pct = round((normal_count / total) * 100.0, 1)
         critical_count = sum(1 for a in self.active_alerts if a["severity"] == "CRITICAL")
-        
+       
         ist_now = datetime.now(timezone(timedelta(hours=5, minutes=30)))
-        
+       
         return {
             "network_health_pct": health_pct,
             "total_stations": total,
@@ -369,6 +394,28 @@ class TelemetryStateManager:
             except Exception as e:
                 print(f"Error in simulation loop: {e}")
             await asyncio.sleep(3.5)
+
+    async def refresh_live_weather(self):
+        """Fetch one real observation per station from OpenWeatherMap and
+        update self.live_cache. Failures for individual stations are logged
+        and simply leave that station's previous cached value (or None) in
+        place, so the fast tick loop above falls back to synthetic data."""
+        for st_id, station in self.stations.items():
+            result = await fetch_live_reading(station["lat"], station["lng"])
+            if result is not None:
+                self.live_cache[st_id] = result
+
+    async def run_live_weather_loop(self):
+        """Background loop that refreshes self.live_cache on a slow cadence
+        (LIVE_WEATHER_POLL_SECONDS). Only started when USE_LIVE_WEATHER=true.
+        Kept separate from run_simulation_loop so the fast 3.5s UI ticker
+        never blocks on a network call."""
+        while self.is_running:
+            try:
+                await self.refresh_live_weather()
+            except Exception as e:
+                print(f"Error in live weather loop: {e}")
+            await asyncio.sleep(LIVE_WEATHER_POLL_SECONDS)
 
 # Global singleton manager instance
 state_manager = TelemetryStateManager()

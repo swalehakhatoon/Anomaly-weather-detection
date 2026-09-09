@@ -13,15 +13,24 @@ from backend.models import (
 )
 from backend.state import state_manager
 from backend.detector import haversine_distance
+from backend.config import USE_LIVE_WEATHER
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup: Start background simulation ticker
     loop_task = asyncio.create_task(state_manager.run_simulation_loop())
+
+    # Only starts if USE_LIVE_WEATHER=true in backend/.env
+    live_task = None
+    if USE_LIVE_WEATHER:
+        live_task = asyncio.create_task(state_manager.run_live_weather_loop())
+
     yield
     # Shutdown
     state_manager.is_running = False
     loop_task.cancel()
+    if live_task:
+        live_task.cancel()
 
 app = FastAPI(
     title="SkyGuard AI  (वायु-दृष्टि) API",
@@ -69,7 +78,7 @@ def get_station_readings(station_id: str, limit: int = Query(50, ge=1, le=100)):
 def get_station_neighbors(station_id: str, parameter: str = "temperature"):
     if station_id not in state_manager.stations:
         raise HTTPException(status_code=404, detail=f"Station {station_id} not found")
-    
+   
     target_station = state_manager.stations[station_id]
     target_readings = state_manager.readings_history[station_id]
     target_val = target_readings[-1][parameter] if target_readings else target_station.get("base_" + parameter, 30.0)
@@ -125,7 +134,7 @@ def submit_analyst_feedback(alert_id: str, payload: FeedbackRequest):
             matched_anomaly_id = a["anomaly_id"]
             a["acknowledged"] = True
             break
-            
+           
     if not matched_anomaly_id and state_manager.active_anomalies:
         matched_anomaly_id = state_manager.active_anomalies[0]["anomaly_id"]
 
@@ -149,10 +158,10 @@ def reset_simulation():
 def get_station_trust_score(station_id: str):
     if station_id not in state_manager.stations:
         raise HTTPException(status_code=404, detail=f"Station {station_id} not found")
-        
+       
     st = state_manager.stations[station_id]
     overall_trust = st["trust_score"]
-    
+   
     # Grade assignment
     if overall_trust >= 0.90:
         grade = "A+ (EXCELLENT)"
@@ -198,7 +207,7 @@ def get_metrics():
 frontend_dist = os.path.join(os.path.dirname(os.path.dirname(__file__)), "frontend", "dist")
 if os.path.exists(frontend_dist):
     app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
-    
+   
     @app.get("/{full_path:path}")
     async def serve_spa(full_path: str):
         file_path = os.path.join(frontend_dist, full_path)
