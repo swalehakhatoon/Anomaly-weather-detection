@@ -5,7 +5,7 @@ import { ExternalLink, ShieldCheck, AlertCircle, Thermometer, Wind, Droplets } f
 
 const createRadarIcon = (status, trustScore) => {
   let color = '#10b981'; // Green
-  let pingColor = 'rgba(16, 185, 129, 0.4)';
+  let pingColor = 'rgba(168, 185, 129, 0.4)';
   
   if (status === 'EXTREME') {
     color = '#a855f7'; // Purple - Genuine Extreme
@@ -89,7 +89,7 @@ export default function StationMap({ stations, onSelectStation }) {
       >
         <TileLayer
           attribution='&copy; <a href="https://carto.com/">CARTO</a>'
-          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png"
+          url="https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png?key=cb1_33z7_1_9a58dfb9ce3f51b545c96ac7"
         />
         {stations.map((st) => (
           <Marker
